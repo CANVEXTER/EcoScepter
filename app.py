@@ -22,7 +22,13 @@ from scripts.io import read_bands
 from scripts.visualize import stretch, index_to_rgb
 from scripts.indices import compute_ndvi, compute_mndwi, compute_ndbi
 from scripts.masking import valid_data_mask, water_mask_from_mndwi, apply_masks
-from scripts.change import delta, composite_change_score
+from scripts.change import (
+    delta,
+    composite_change_score,
+    ndvi_slope,     # <-- REQUIRED for slope logic
+    normalize,      # <-- REQUIRED for score normalization
+)
+
 from scripts.thresholds import aggressiveness_to_threshold, apply_threshold
 from scripts.assessment import (
     assess_vegetation,
