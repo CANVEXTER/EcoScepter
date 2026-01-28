@@ -1,5 +1,19 @@
 import numpy as np
 
+# --- HELPER (Restored to fix import error in assessment.py) ---
+def normalize(arr: np.ndarray) -> np.ndarray:
+    """
+    Min-Max normalization to [0, 1].
+    Used by assessment.py for visualization, NOT used for change detection logic.
+    """
+    vmin = np.nanmin(arr)
+    vmax = np.nanmax(arr)
+    if vmax == vmin:
+        return np.zeros_like(arr, dtype=np.float32)
+    return (arr - vmin) / (vmax - vmin)
+
+# --- CORE LOGIC ---
+
 def delta(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     if a.shape != b.shape:
         raise ValueError("Input arrays must have the same shape")
