@@ -1,17 +1,13 @@
-# scripts/change.py
 import numpy as np
-from numpy.polynomial.polynomial import polyfit
-
 
 def delta(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     if a.shape != b.shape:
         raise ValueError("Input arrays must have the same shape")
     return b - a
 
-
 def ndvi_slope(years: np.ndarray, ndvi_stack: np.ndarray) -> np.ndarray:
-    t = years[:, None, None]              # (T, 1, 1)
-    y = ndvi_stack.astype(np.float32)     # (T, H, W)
+    t = years[:, None, None]
+    y = ndvi_stack.astype(np.float32)
 
     valid = ~np.isnan(y)
     count = np.sum(valid, axis=0)
@@ -27,16 +23,6 @@ def ndvi_slope(years: np.ndarray, ndvi_stack: np.ndarray) -> np.ndarray:
 
     return slope
 
-
-
-def normalize(arr: np.ndarray) -> np.ndarray:
-    vmin = np.nanmin(arr)
-    vmax = np.nanmax(arr)
-    if vmax == vmin:
-        return np.zeros_like(arr, dtype=np.float32)
-    return (arr - vmin) / (vmax - vmin)
-
-
 def composite_change_score(
     d_ndvi: np.ndarray,
     d_ndbi: np.ndarray,
@@ -45,14 +31,27 @@ def composite_change_score(
     w_ndbi: float = 0.3,
 ) -> np.ndarray:
     """
-    NDVI loss is weighted by baseline vegetation density.
+    Calculates a raw physical change score.
+    Positive Score = Likely Degradation.
     """
     if d_ndvi.shape != d_ndbi.shape:
         raise ValueError("Input arrays must have the same shape")
 
+    # Weight NDVI loss by how much vegetation was there originally
     ndvi_weight = np.clip(ndvi_baseline, 0.0, 1.0)
 
-    ndvi_loss = normalize((-d_ndvi) * ndvi_weight)
-    ndbi_gain = normalize(d_ndbi)
+    # d_ndvi is (Current - Baseline). Negative means loss.
+    # Invert so "Loss" is positive
+    ndvi_loss = -d_ndvi 
+    
+    # Calculate weighted loss
+    weighted_loss = ndvi_loss * ndvi_weight
+    
+    # NDBI Gain: Positive means more built-up
+    ndbi_gain = d_ndbi 
 
-    return (w_ndvi * ndvi_loss) + (w_ndbi * ndbi_gain)
+    # Composite Score (Physical range, approx -1 to 1)
+    # Clip NDBI to avoid extreme noise
+    score = (w_ndvi * weighted_loss) + (w_ndbi * np.clip(ndbi_gain, -0.5, 0.5))
+
+    return score

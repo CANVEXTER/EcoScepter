@@ -1,59 +1,44 @@
-# scripts/thresholds.py
 import numpy as np
-
-def auto_baseline_threshold(
-    score: np.ndarray,
-    percentile: float = 90.0,
-) -> float:
-    """
-    Derive a baseline threshold from the score distribution.
-
-    Parameters
-    ----------
-    score : np.ndarray
-        Continuous change score (H, W)
-    percentile : float
-        Upper percentile used as baseline
-
-    Returns
-    -------
-    float
-        Baseline threshold value
-    """
-    if not (0 < percentile < 100):
-        raise ValueError("Percentile must be between 0 and 100")
-    return float(np.nanpercentile(score, percentile))
-
 
 def aggressiveness_to_threshold(
     score: np.ndarray,
     aggressiveness: float,
-    base_percentile: float = 90.0,
-    span: float = 15.0,
 ) -> float:
     """
-    Map a user aggressiveness value [0,1] to a threshold.
-
-    aggressiveness = 0   → conservative (higher threshold)
-    aggressiveness = 1   → aggressive (lower threshold)
-
-    The threshold is bounded within a percentile range to prevent extremes.
+    Determines a cutoff threshold for the change score.
+    
+    Aggressiveness 0.0 (Conservative) -> Higher Threshold
+    Aggressiveness 1.0 (Sensitive)    -> Lower Threshold
     """
     if not (0.0 <= aggressiveness <= 1.0):
-        raise ValueError("Aggressiveness must be in [0, 1]")
+        aggressiveness = 0.5
+    
+    valid_scores = score[np.isfinite(score)]
+    if valid_scores.size == 0:
+        return 0.5 
+        
+    # 1. Statistical Bounds (Relative to image content)
+    p_high = np.percentile(valid_scores, 99) 
+    p_low  = np.percentile(valid_scores, 85)
+    
+    # 2. Physical Bounds (Hard limits)
+    # Score > 0.4 is almost certainly real degradation
+    # Score < 0.1 is usually just noise
+    phy_high = 0.4
+    phy_low = 0.1
+    
+    # Interpolate based on aggressiveness
+    # Conservative (0.0) -> wants High Threshold (p_high or phy_high)
+    target_p = p_high - (aggressiveness * (p_high - p_low))
+    target_phy = phy_high - (aggressiveness * (phy_high - phy_low))
+    
+    # Take the MAXIMUM to avoid flagging noise in static images
+    final_threshold = max(target_p, target_phy)
+    
+    return float(final_threshold)
 
-    high_p = base_percentile + span / 2
-    low_p  = base_percentile - span / 2
-
-    target_p = high_p - aggressiveness * span
-    return float(np.nanpercentile(score, target_p))
-
-
-def apply_threshold(
-    score: np.ndarray,
-    threshold: float,
-) -> np.ndarray:
-    """
-    Apply a scalar threshold to produce a boolean change mask.
-    """
+def apply_threshold(score: np.ndarray, threshold: float) -> np.ndarray:
     return score >= threshold
+
+def auto_baseline_threshold(score: np.ndarray, percentile: float = 90.0) -> float:
+    return float(np.nanpercentile(score, percentile))
