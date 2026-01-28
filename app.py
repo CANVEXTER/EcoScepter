@@ -2,7 +2,7 @@ import os
 import glob
 import streamlit as st
 import numpy as np
-import pandas as pd # Needed for the map
+import pandas as pd
 import re
 from datetime import datetime
 
@@ -33,8 +33,9 @@ def extract_date(path: str) -> datetime:
 # Backend Imports
 from matplotlib import colormaps
 from scipy.ndimage import binary_opening
-from scripts.io import read_bands, read_metadata # <--- UPDATED IMPORT
-from scripts.visualize import stretch, index_to_rgb
+from scripts.io import read_bands, read_metadata
+# UPDATED IMPORT: Added plot_with_grid
+from scripts.visualize import stretch, index_to_rgb, plot_with_grid 
 from scripts.indices import compute_ndvi, compute_mndwi, compute_ndbi
 from scripts.masking import valid_data_mask, water_mask_from_mndwi
 from scripts.change import delta, composite_change_score, ndvi_slope
@@ -205,42 +206,24 @@ with tab_analysis:
         selected_file = st.selectbox("SATELLITE IMAGE", options=[os.path.basename(f) for f in raw_files], label_visibility="collapsed")
         file_path = os.path.join(DATA_DIR, selected_file)
         
-        # --- NEW METADATA SECTION START ---
+        # --- METADATA PANEL ---
         if os.path.exists(file_path):
             try:
                 meta = read_metadata(file_path)
                 with st.expander(":: FILE INTELLIGENCE", expanded=False):
-                    
-                    # 1. Location Details
                     if "center" in meta:
                         st.caption("📍 LOCATION PIN")
-                        # Mini Map
                         df_map = pd.DataFrame([meta["center"]])
                         st.map(df_map, zoom=10, size=20, use_container_width=True)
-                        
-                        st.caption("GEOGRAPHIC COORDINATES (WGS84)")
-                        st.code(
-                            f"LAT: {meta['center']['lat']:.5f}\n"
-                            f"LON: {meta['center']['lon']:.5f}", 
-                            language="yaml"
-                        )
-                    else:
-                        st.warning("Could not determine geographic location.")
-
-                    # 2. Technical Details
+                        st.caption("GEOGRAPHIC COORDINATES")
+                        st.code(f"LAT: {meta['center']['lat']:.4f}\nLON: {meta['center']['lon']:.4f}", language="yaml")
+                    
                     st.divider()
                     st.caption(f"CRS: {meta['crs_raw']}")
                     st.caption(f"DIM: {meta['width']}x{meta['height']} | BANDS: {meta['count']}")
-                    
-                    # 3. Hidden Tags
-                    if meta.get("tags"):
-                        st.divider()
-                        st.caption("EMBEDDED TAGS")
-                        st.json(meta["tags"], expanded=False)
-                        
             except Exception as e:
                 st.warning(f"Metadata Error: {e}")
-        # --- NEW METADATA SECTION END ---
+        # ----------------------
         
         st.markdown("#### EXECUTION")
         process_btn = st.button("RUN ANALYSIS", type="primary", use_container_width=True)
@@ -248,9 +231,19 @@ with tab_analysis:
         if process_btn:
             with st.spinner("PROCESSING..."):
                 arr = read_bands(file_path)
+                # Fetch metadata again specifically for bounds storage
+                meta_run = read_metadata(file_path)
+                bounds_run = meta_run.get("bounds_wgs84", None)
+                
                 res = assess_vegetation(arr)
                 auto_thr = auto_tune_assessment_thresholds(res["ndvi"], res["mndwi"])
-                st.session_state["analysis_result"] = {"arr": arr, **res, "auto_stats": auto_thr}
+                
+                st.session_state["analysis_result"] = {
+                    "arr": arr, 
+                    "bounds": bounds_run, # Store bounds
+                    **res, 
+                    "auto_stats": auto_thr
+                }
                 st.toast("Processing Complete")
 
         if "analysis_result" in st.session_state:
@@ -263,31 +256,26 @@ with tab_analysis:
                 label_visibility="collapsed"
             )
             
-            # CONTROL DECK B: CLASSIFICATION
+            # CONTROL DECK B
             with st.expander(":: CLASSIFICATION LOGIC", expanded=False):
                 ar = st.session_state["analysis_result"]
                 tuning_mode = st.radio("Method", ["EXPLICIT (PHYSICAL)", "ADAPTIVE (OTSU)", "MANUAL"], label_visibility="collapsed")
                 
                 if tuning_mode == "EXPLICIT (PHYSICAL)":
+                    t_water, t_clear, t_vlow, t_vhigh = REFERENCE_THRESHOLDS.values()
                     st.caption("Standard physics-based thresholds.")
-                    t_water = REFERENCE_THRESHOLDS["water_t"]
-                    t_clear = REFERENCE_THRESHOLDS["clear_t"]
-                    t_vlow  = REFERENCE_THRESHOLDS["veg_low"]
-                    t_vhigh = REFERENCE_THRESHOLDS["veg_high"]
                 elif tuning_mode == "ADAPTIVE (OTSU)":
-                    st.caption("Statistical separation based on histogram valleys.")
                     stats = ar["auto_stats"]
                     t_water, t_clear, t_vlow, t_vhigh = stats["water_t"], stats["clear_t"], stats["veg_low"], stats["veg_high"]
+                    st.caption("Statistical separation based on histogram valleys.")
                 else:
                     t_water = st.slider("Water Max", -1.0, 1.0, 0.0, 0.05, key="an_t_water")
                     t_clear = st.slider("Barren Max", -1.0, 1.0, 0.6, 0.05, key="an_t_clear")
                     t_vlow, t_vhigh = st.slider("Veg Range", -1.0, 1.0, (0.6, 0.9), 0.05, key="an_t_veg")
 
-            # CONTROL DECK C: OPTICS
+            # CONTROL DECK C
             with st.expander(":: IMAGE AESTHETICS", expanded=False):
-                st.caption("Dynamic Range Clipping")
                 p_min, p_max = st.slider("Histogram Clip %", 0, 100, (2, 98), 1, key="an_clip")
-                st.caption("Post-Processing")
                 b_val = st.slider("Brightness", 0.1, 3.0, 1.0, 0.1, key="an_bright")
                 c_val = st.slider("Contrast", 0.1, 3.0, 1.0, 0.1, key="an_cont")
 
@@ -335,9 +323,16 @@ with tab_analysis:
                     <div class="l-item"><div class="l-swatch" style="background:#228b22;"></div><span>VEG (HIGH)</span></div>
                 </div>""", unsafe_allow_html=True)
             
-            # Main Render (UPDATED: use_container_width)
-            st.image(display_img, use_container_width=True, channels="RGB")
-            st.caption(f"VIEW: {caption} | CLIP: {p_min}-{p_max}%")
+            # --- UPDATED VISUALIZATION LOGIC ---
+            if res.get("bounds"):
+                # Use Matplotlib to draw grid
+                fig = plot_with_grid(display_img, res["bounds"], title=f"GEO-REFERENCED: {caption}")
+                st.pyplot(fig, use_container_width=True)
+            else:
+                # Fallback to standard image if no geodata
+                st.image(display_img, use_container_width=True, channels="RGB")
+                st.caption(f"VIEW: {caption} (No Geodata)")
+            # -----------------------------------
             
             if layer_mode == "NDBI (CLEARINGS/BUILDUPS)":
                 st.info("ℹ NOTE: NDBI highlights non-vegetated areas. Use Classification for precise separation.")
@@ -360,13 +355,13 @@ with tab_change:
         label_visibility="collapsed"
     )
 
-    # 2. SPECIFIC INCLUSION (KEY FIXED)
+    # 2. SPECIFIC INCLUSION
     range_indices = list(range(start_i, end_i + 1))
     range_labels = [all_labels[i] for i in range_indices]
     
     with st.expander(":: ACTIVE OBSERVATIONS (EXCLUDE DATA)", expanded=True):
         selected_labels = st.multiselect(
-            "Uncheck bad observations (clouds/artifacts) to exclude them from calculation:",
+            "Uncheck bad observations to exclude:",
             options=range_labels,
             default=range_labels,
             label_visibility="collapsed",
@@ -408,6 +403,11 @@ with tab_change:
             sub_dates = [extract_date(f) for f in subset_files]
             arrays = [read_bands(f) for f in subset_files]
             
+            # Fetch Metadata for Reference (Latest Image)
+            ref_file = subset_files[-1]
+            meta_ref = read_metadata(ref_file)
+            bounds_ref = meta_ref.get("bounds_wgs84", None)
+
             # Math
             ndvi_stack = np.stack([compute_ndvi(a) for a in arrays])
             ref_idx = -1
@@ -429,7 +429,8 @@ with tab_change:
                 "score": score,
                 "change_val": raw_change,
                 "img_latest": arrays[ref_idx],
-                "mask": mask_ref
+                "mask": mask_ref,
+                "bounds": bounds_ref # Store bounds
             }
             st.toast("Calculation Complete")
 
@@ -442,7 +443,6 @@ with tab_change:
         
         with c_dash:
             st.markdown("##### SETTINGS")
-            
             with st.expander(":: SENSITIVITY", expanded=True):
                 sens = st.slider("Threshold Stringency", 0.0, 1.0, 0.5, 0.05, help="Uses Rosin's Corner Method", key="cd_sens")
                 st.caption("Filters")
@@ -501,8 +501,12 @@ with tab_change:
             if show_loss: out_img[deg_mask] = (1-alpha)*out_img[deg_mask] + alpha*c_loss
             if show_gain: out_img[imp_mask] = (1-alpha)*out_img[imp_mask] + alpha*c_gain
             
-            # UPDATED: use_container_width
-            st.image(sanitize_image(out_img), use_container_width=True, caption=f"CHANGE MAP | SENSITIVITY: {sens}")
+            # --- UPDATED VISUALIZATION LOGIC ---
+            if cd.get("bounds"):
+                fig_c = plot_with_grid(sanitize_image(out_img), cd["bounds"], title=f"CHANGE MAP (GEO-REF) | SENSITIVITY: {sens}")
+                st.pyplot(fig_c, use_container_width=True)
+            else:
+                st.image(sanitize_image(out_img), use_container_width=True, caption=f"CHANGE MAP | SENSITIVITY: {sens}")
 
 # ------------------------------------------------------------------------------
 # TAB 3: DOCS
