@@ -2,6 +2,7 @@ import os
 import glob
 import streamlit as st
 import numpy as np
+import pandas as pd # Needed for the map
 import re
 from datetime import datetime
 
@@ -32,7 +33,7 @@ def extract_date(path: str) -> datetime:
 # Backend Imports
 from matplotlib import colormaps
 from scipy.ndimage import binary_opening
-from scripts.io import read_bands
+from scripts.io import read_bands, read_metadata # <--- UPDATED IMPORT
 from scripts.visualize import stretch, index_to_rgb
 from scripts.indices import compute_ndvi, compute_mndwi, compute_ndbi
 from scripts.masking import valid_data_mask, water_mask_from_mndwi
@@ -203,6 +204,43 @@ with tab_analysis:
         st.markdown("#### INPUT SELECTION")
         selected_file = st.selectbox("SATELLITE IMAGE", options=[os.path.basename(f) for f in raw_files], label_visibility="collapsed")
         file_path = os.path.join(DATA_DIR, selected_file)
+        
+        # --- NEW METADATA SECTION START ---
+        if os.path.exists(file_path):
+            try:
+                meta = read_metadata(file_path)
+                with st.expander(":: FILE INTELLIGENCE", expanded=False):
+                    
+                    # 1. Location Details
+                    if "center" in meta:
+                        st.caption("📍 LOCATION PIN")
+                        # Mini Map
+                        df_map = pd.DataFrame([meta["center"]])
+                        st.map(df_map, zoom=10, size=20, use_container_width=True)
+                        
+                        st.caption("GEOGRAPHIC COORDINATES (WGS84)")
+                        st.code(
+                            f"LAT: {meta['center']['lat']:.5f}\n"
+                            f"LON: {meta['center']['lon']:.5f}", 
+                            language="yaml"
+                        )
+                    else:
+                        st.warning("Could not determine geographic location.")
+
+                    # 2. Technical Details
+                    st.divider()
+                    st.caption(f"CRS: {meta['crs_raw']}")
+                    st.caption(f"DIM: {meta['width']}x{meta['height']} | BANDS: {meta['count']}")
+                    
+                    # 3. Hidden Tags
+                    if meta.get("tags"):
+                        st.divider()
+                        st.caption("EMBEDDED TAGS")
+                        st.json(meta["tags"], expanded=False)
+                        
+            except Exception as e:
+                st.warning(f"Metadata Error: {e}")
+        # --- NEW METADATA SECTION END ---
         
         st.markdown("#### EXECUTION")
         process_btn = st.button("RUN ANALYSIS", type="primary", use_container_width=True)
