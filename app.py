@@ -650,7 +650,7 @@ with tab_change:
 
             st.caption(
                 f"Raw score range (5–95%): {lo:.5f} → {hi:.5f} NDVI/year"
-            )
+        )
 
             
             sensitivity_label = (
