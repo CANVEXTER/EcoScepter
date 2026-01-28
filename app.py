@@ -263,6 +263,19 @@ def adjust_image_display(img: np.ndarray, brightness: float = 1.0, contrast: flo
     # Clip to valid range
     return np.clip(img, 0.0, 1.0)
 
+def normalize_for_display(arr, aggressiveness):
+    """
+    UX-only normalization.
+    Aggressiveness controls contrast, not data meaning.
+    """
+    lo = np.nanpercentile(arr, 50 - aggressiveness * 20)
+    hi = np.nanpercentile(arr, 95)
+
+    if hi <= lo:
+        return np.zeros_like(arr, dtype=np.float32)
+
+    return np.clip((arr - lo) / (hi - lo + 1e-6), 0, 1)
+
 
 # Header
 st.markdown('<p class="main-header">Vegetation & Change Detection Analysis Platform</p>', unsafe_allow_html=True)
@@ -596,7 +609,7 @@ with tab_change:
 
                 ndvi_trend = ndvi_slope(years, ndvi_stack)
 
-                score = normalize(-ndvi_trend)   # degradation = negative slope
+                score = -ndvi_trend   # degradation = negative slope
                 ndvi_change = ndvi_trend         # reused for improvement
 
             st.session_state["change_data"] = {
@@ -629,6 +642,16 @@ with tab_change:
                 0.0, 1.0, 0.5, 0.05,
                 help="Lower = Detect only major changes | Higher = Detect subtle changes"
             )
+            # --- UX feedback: show what range the slider is actually operating on ---
+            raw_score = st.session_state["change_data"]["score"]
+
+            lo = np.nanpercentile(raw_score, 5)
+            hi = np.nanpercentile(raw_score, 95)
+
+            st.caption(
+                f"Raw score range (5–95%): {lo:.5f} → {hi:.5f} NDVI/year"
+            )
+
             
             sensitivity_label = (
                 "● Conservative" if aggressiveness < 0.35 else
@@ -664,6 +687,11 @@ with tab_change:
             
             if apply_btn:
                 change_data = st.session_state["change_data"]
+                disp_score = normalize_for_display(
+                    change_data["score"],
+                    aggressiveness
+                )
+
                 
                 # Compute degradation mask
                 thr = aggressiveness_to_threshold(
