@@ -14,7 +14,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Robust Date Parsing (Fixed Version)
+# Robust Date Parsing
 DATE_RE_1 = re.compile(r"(\d{2})_(\d{2})_(\d{4})")  # dd_mm_yyyy
 DATE_RE_2 = re.compile(r"(\d{4})-(\d{2})-(\d{2})")  # yyyy-mm-dd
 DATE_RE_3 = re.compile(r"(\d{4})(\d{2})(\d{2})")    # yyyymmdd
@@ -42,135 +42,49 @@ from scripts.assessment import assess_vegetation, auto_tune_assessment_threshold
 
 DATA_DIR = "data"
 
+# PHYSICAL CONSTANTS (EXPLICIT MODE)
+REFERENCE_THRESHOLDS = {
+    "water_t": 0.0,   # MNDWI > 0.0 is Water
+    "clear_t": 0.60,  # NDVI < 0.60 is Barren/Urban
+    "veg_low": 0.60,  # Vegetation starts at 0.60
+    "veg_high": 0.90  # Dense vegetation saturates at 0.90
+}
+
 # Professional Dark Theme CSS
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=JetBrains+Mono:wght@400;500;700&display=swap');
-
-    /* Global Reset */
-    .stApp {
-        background-color: #09090b; /* Zinc-950 */
-        color: #e4e4e7; /* Zinc-200 */
-        font-family: 'Inter', sans-serif;
-    }
-
-    /* Headers */
-    h1, h2, h3 {
-        font-family: 'Inter', sans-serif;
-        letter-spacing: -0.025em;
-        font-weight: 600;
-        color: #fafafa;
-    }
+    .stApp { background-color: #09090b; color: #e4e4e7; font-family: 'Inter', sans-serif; }
+    h1, h2, h3 { font-family: 'Inter', sans-serif; letter-spacing: -0.025em; font-weight: 600; color: #fafafa; }
+    .main-title { font-size: 1.5rem; border-bottom: 1px solid #27272a; padding-bottom: 1rem; margin-bottom: 2rem; display: flex; align-items: center; gap: 0.75rem; }
+    .stat-card { background-color: #18181b; border: 1px solid #27272a; border-radius: 4px; padding: 1.25rem; transition: border-color 0.2s; }
+    .stat-label { color: #a1a1aa; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; }
+    .stat-value { font-family: 'JetBrains Mono', monospace; font-size: 1.5rem; font-weight: 700; color: #f4f4f5; }
+    section[data-testid="stSidebar"] { background-color: #0c0c0e; border-right: 1px solid #27272a; }
+    .stTabs [data-baseweb="tab-list"] { gap: 2rem; background-color: transparent; border-bottom: 1px solid #27272a; padding-bottom: 0; }
+    .stTabs [data-baseweb="tab"] { height: 3rem; background-color: transparent; border: none; color: #71717a; font-weight: 500; }
+    .stTabs [aria-selected="true"] { color: #fafafa; border-bottom: 2px solid #22c55e; }
+    .stButton > button { background-color: #27272a; color: #fafafa; border: 1px solid #3f3f46; border-radius: 4px; font-weight: 500; transition: all 0.2s; }
+    .stButton > button:hover { background-color: #3f3f46; border-color: #52525b; }
+    div[data-testid="stVerticalBlock"] > .stButton > button[kind="primary"] { background-color: #22c55e; color: #052e16; border: none; font-weight: 600; }
+    #MainMenu {visibility: hidden;} footer {visibility: hidden;}
+    .block-container { padding-top: 2rem; padding-bottom: 5rem; }
     
-    .main-title {
-        font-size: 1.5rem;
-        border-bottom: 1px solid #27272a;
-        padding-bottom: 1rem;
-        margin-bottom: 2rem;
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-    }
-    
-    /* Technical Data Cards */
-    .stat-card {
-        background-color: #18181b; /* Zinc-900 */
-        border: 1px solid #27272a; /* Zinc-800 */
-        border-radius: 4px;
-        padding: 1.25rem;
-        transition: border-color 0.2s;
-    }
-    .stat-card:hover {
-        border-color: #3f3f46;
-    }
-    
-    .stat-label {
-        color: #a1a1aa;
-        font-size: 0.75rem;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        margin-bottom: 0.5rem;
-    }
-    
-    .stat-value {
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 1.5rem;
-        font-weight: 700;
-        color: #f4f4f5;
-    }
-
-    /* Sidebar Styling */
-    section[data-testid="stSidebar"] {
-        background-color: #0c0c0e;
-        border-right: 1px solid #27272a;
-    }
-
-    /* Tabs */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 2rem;
-        background-color: transparent;
-        border-bottom: 1px solid #27272a;
-        padding-bottom: 0;
-    }
-    .stTabs [data-baseweb="tab"] {
-        height: 3rem;
-        background-color: transparent;
-        border: none;
-        color: #71717a;
-        font-weight: 500;
-    }
-    .stTabs [aria-selected="true"] {
-        color: #fafafa;
-        border-bottom: 2px solid #22c55e; /* Primary Green */
-    }
-
-    /* Buttons */
-    .stButton > button {
-        background-color: #27272a;
-        color: #fafafa;
-        border: 1px solid #3f3f46;
-        border-radius: 4px;
-        font-family: 'Inter', sans-serif;
-        font-weight: 500;
-        transition: all 0.2s;
-    }
-    .stButton > button:hover {
-        background-color: #3f3f46;
-        border-color: #52525b;
-    }
-    .stButton > button:active {
-        background-color: #22c55e;
-        color: #000;
-        border-color: #22c55e;
-    }
-
-    /* Primary Action Buttons */
-    div[data-testid="stVerticalBlock"] > .stButton > button[kind="primary"] {
-        background-color: #22c55e;
-        color: #052e16;
-        border: none;
-        font-weight: 600;
-    }
-
-    /* Legend / Info Box */
+    /* Legend Styling Fix for Width */
     .legend-box {
-        background: #18181b;
-        border-left: 3px solid #3f3f46;
-        padding: 1rem;
-        margin-top: 1rem;
-        font-size: 0.9rem;
+        display: flex; 
+        gap: 1.5rem; 
+        background: #18181b; 
+        padding: 1rem; 
+        border: 1px solid #27272a; 
+        margin-bottom: 1rem;
+        width: 100%;
+        box-sizing: border-box;
+        flex-wrap: wrap;
     }
-    
-    /* Remove default padding */
-    .block-container {
-        padding-top: 2rem;
-        padding-bottom: 5rem;
-    }
-    
-    /* Hide Streamlit elements */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    
+    .legend-item { display:flex; align-items:center; gap:0.5rem; }
+    .legend-swatch { width:12px; height:12px; }
+    .legend-label { font-size:0.8rem; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -183,7 +97,6 @@ def sanitize_image(img: np.ndarray) -> np.ndarray:
     return np.clip(img, 0.0, 1.0).astype(np.float32)
 
 def adjust_display(img: np.ndarray, brightness: float = 1.0, contrast: float = 1.0) -> np.ndarray:
-    """Post-processing for display only."""
     img = (img - 0.5) * contrast + 0.5
     img = img * brightness
     return np.clip(img, 0.0, 1.0)
@@ -193,10 +106,9 @@ def adjust_display(img: np.ndarray, brightness: float = 1.0, contrast: float = 1
 # ==============================================================================
 
 with st.sidebar:
-    st.markdown("## ECO_SCEPTER")
-    st.markdown('<div style="font-size: 0.75rem; color: #71717a; margin-top: -1rem; margin-bottom: 2rem;">REMOTE SENSING ANALYTICS // V2.0</div>', unsafe_allow_html=True)
+    st.markdown("## EcoScepter")
+    st.markdown('<div style="font-size: 0.75rem; color: #71717a; margin-top: -1rem; margin-bottom: 2rem;">REMOTE SENSING ANALYTICS // V2.4</div>', unsafe_allow_html=True)
     
-    # Data Loader
     st.markdown("### :: DATA SOURCE")
     tif_files = glob.glob(os.path.join(DATA_DIR, "*.tif"))
     
@@ -223,25 +135,16 @@ with st.sidebar:
         st.error(f"Date Parsing Error: {e}")
         st.stop()
 
-    st.markdown("---")
-    st.markdown("### :: GLOBAL SETTINGS")
-    
-    with st.expander("DISPLAY PARAMETERS", expanded=False):
-        st.caption("These settings affect all visualizations.")
-        global_gamma = st.slider("GAMMA CORRECTION", 0.5, 2.0, 1.0, 0.1)
-
 # ==============================================================================
 # 4. MAIN INTERFACE
 # ==============================================================================
 
-# Header
 st.markdown('<div class="main-title"><span>Target Area Analysis</span><span style="margin-left:auto; font-size:0.8rem; font-family:\'JetBrains Mono\'; color:#52525b;">SESSION_ID: 0X8291A</span></div>', unsafe_allow_html=True)
 
 if not tif_files:
     st.info("DATA DIRECTORY EMPTY. PLEASE UPLOAD GEOTIFF IMAGERY.")
     st.stop()
 
-# Tabs
 tab_analysis, tab_change, tab_docs = st.tabs(["VEGETATION INDICES", "CHANGE DETECTION", "DOCUMENTATION"])
 
 # ------------------------------------------------------------------------------
@@ -262,80 +165,118 @@ with tab_analysis:
             with st.spinner("PROCESSING SPECTRAL BANDS..."):
                 arr = read_bands(file_path)
                 res = assess_vegetation(arr)
-                # Auto-tune thresholds
+                # Auto-tune thresholds (Otsu Method)
                 auto_thr = auto_tune_assessment_thresholds(res["ndvi"], res["mndwi"])
-                st.session_state["analysis_result"] = {"arr": arr, **res, **auto_thr}
+                st.session_state["analysis_result"] = {"arr": arr, **res, "auto_stats": auto_thr}
                 st.toast("Processing Complete", icon="⚡")
 
         if "analysis_result" in st.session_state:
             st.markdown("---")
             st.markdown("#### LAYER CONTROL")
+            # TERM FIX: NDBI Renamed
             layer_mode = st.radio(
                 "ACTIVE LAYER",
-                ["CLASSIFICATION", "TRUE COLOR (RGB)", "NDVI (VEGETATION)", "MNDWI (WATER)", "NDBI (URBAN)"],
+                ["CLASSIFICATION", "TRUE COLOR (RGB)", "NDVI (VEGETATION)", "MNDWI (WATER)", "NDBI (CLEARINGS/BUILDUPS)"],
                 label_visibility="collapsed"
             )
             
-            st.markdown("#### IMAGE TUNING")
-            b_val = st.slider("BRIGHTNESS", 0.5, 2.0, 1.0, 0.1, key="an_b")
-            c_val = st.slider("CONTRAST", 0.5, 2.0, 1.0, 0.1, key="an_c")
+            st.markdown("---")
+            st.markdown("#### CLASSIFICATION RULES")
+            ar = st.session_state["analysis_result"]
+            
+            tuning_mode = st.radio("THRESHOLD LOGIC", ["EXPLICIT (STANDARD)", "AUTO-ADAPTIVE (OTSU/STATS)", "MANUAL"], label_visibility="collapsed")
+            
+            if tuning_mode == "EXPLICIT (STANDARD)":
+                st.caption("Using fixed physical constants. Best for consistency across images.")
+                t_water = REFERENCE_THRESHOLDS["water_t"]
+                t_clear = REFERENCE_THRESHOLDS["clear_t"]
+                t_vlow  = REFERENCE_THRESHOLDS["veg_low"]
+                t_vhigh = REFERENCE_THRESHOLDS["veg_high"]
+                
+            elif tuning_mode == "AUTO-ADAPTIVE (OTSU/STATS)":
+                st.caption("Derived from image statistics (Otsu's method). Good for maximizing contrast.")
+                stats = ar["auto_stats"]
+                t_water = stats["water_t"]
+                t_clear = stats["clear_t"]
+                t_vlow  = stats["veg_low"]
+                t_vhigh = stats["veg_high"]
+                
+            else: # MANUAL
+                st.caption("Override classification boundaries:")
+                t_water = st.slider("WATER (MNDWI)", -1.0, 1.0, REFERENCE_THRESHOLDS["water_t"], 0.05)
+                t_clear = st.slider("CLEAR LAND (NDVI)", -1.0, 1.0, REFERENCE_THRESHOLDS["clear_t"], 0.05)
+                t_vlow, t_vhigh = st.slider("VEGETATION RANGE", -1.0, 1.0, (REFERENCE_THRESHOLDS["veg_low"], REFERENCE_THRESHOLDS["veg_high"]), 0.05)
+                
+            st.markdown("---")
+            st.markdown("#### IMAGE SETTINGS")
+            with st.expander("DYNAMIC RANGE (CLIP)", expanded=True):
+                p_min = st.slider("SHADOW CLIP (%)", 0, 10, 2, 1)
+                p_max = st.slider("HIGHLIGHT CLIP (%)", 90, 100, 98, 1)
+                
+            b_val = st.slider("BRIGHTNESS", 0.1, 3.0, 1.0, 0.1, key="an_b")
+            c_val = st.slider("CONTRAST", 0.1, 3.0, 1.0, 0.1, key="an_c")
 
     with col_view:
         if "analysis_result" in st.session_state:
             res = st.session_state["analysis_result"]
             
-            # Prepare Base RGB
-            base_rgb = sanitize_image(stretch(np.stack(res["arr"][:3], axis=-1)))
+            # Dynamic Stretch applied to RGB
+            base_rgb = sanitize_image(stretch(np.stack(res["arr"][:3], axis=-1), pmin=p_min, pmax=p_max))
             base_rgb = adjust_display(base_rgb, b_val, c_val)
             
-            # Logic for Layers
             display_img = base_rgb
             caption_text = "TRUE COLOR COMPOSITE"
             
             if layer_mode == "NDVI (VEGETATION)":
-                display_img = sanitize_image(index_to_rgb(res["ndvi"], "RdYlGn"))
+                display_img = sanitize_image(index_to_rgb(res["ndvi"], "RdYlGn", pmin=p_min, pmax=p_max))
+                display_img = adjust_display(display_img, b_val, c_val)
                 caption_text = "NORMALIZED DIFFERENCE VEGETATION INDEX"
                 
             elif layer_mode == "MNDWI (WATER)":
-                display_img = sanitize_image(index_to_rgb(res["mndwi"], "Blues"))
+                display_img = sanitize_image(index_to_rgb(res["mndwi"], "Blues", pmin=p_min, pmax=p_max))
+                display_img = adjust_display(display_img, b_val, c_val)
                 caption_text = "MODIFIED NORMALIZED DIFFERENCE WATER INDEX"
                 
-            elif layer_mode == "NDBI (URBAN)":
-                display_img = sanitize_image(index_to_rgb(res["ndbi"], "inferno"))
+            elif layer_mode == "NDBI (CLEARINGS/BUILDUPS)":
+                display_img = sanitize_image(index_to_rgb(res["ndbi"], "inferno", pmin=p_min, pmax=p_max))
+                display_img = adjust_display(display_img, b_val, c_val)
                 caption_text = "NORMALIZED DIFFERENCE BUILT-UP INDEX"
                 
             elif layer_mode == "CLASSIFICATION":
-                # Apply Classification Logic
-                water_mask = res["mndwi"] > res["water_t"]
-                clear_mask = (~water_mask) & (res["ndvi"] < res["clear_t"])
+                #Explicit Logic
+                water_mask = res["mndwi"] > t_water
+                clear_mask = (~water_mask) & (res["ndvi"] < t_clear)
                 veg_mask = (~water_mask) & (~clear_mask)
                 
-                # Create Overlay
                 overlay = base_rgb.copy()
                 overlay[water_mask] = [0.0, 0.3, 0.8]   # Deep Blue
                 overlay[clear_mask] = [0.6, 0.5, 0.4]   # Brown/Grey
                 
                 # Vegetation Gradient
                 ndvi_veg = np.where(veg_mask, res["ndvi"], np.nan)
-                veg_norm = np.clip((ndvi_veg - res["veg_low"]) / (res["veg_high"] - res["veg_low"] + 1e-6), 0, 1)
+                veg_norm = np.clip((ndvi_veg - t_vlow) / (t_vhigh - t_vlow + 1e-6), 0, 1)
                 veg_colors = colormaps["YlGn"](veg_norm)[..., :3]
-                
                 overlay[veg_mask] = veg_colors[veg_mask]
-                display_img = sanitize_image(adjust_display(overlay, b_val, c_val))
-                caption_text = "LAND COVER CLASSIFICATION"
                 
-                # Professional Legend
+                display_img = sanitize_image(overlay)
+                caption_text = f"LAND COVER CLASSIFICATION (Water > {t_water:.2f}, Veg > {t_vlow:.2f})"
+                
+                # LAYOUT FIX: Updated CSS class and structure
                 st.markdown("""
-                <div style="display: flex; gap: 1.5rem; background: #18181b; padding: 1rem; border: 1px solid #27272a; margin-bottom: 1rem;">
-                    <div style="display:flex; align-items:center; gap:0.5rem;"><div style="width:12px; height:12px; background:#004dcc;"></div><span style="font-size:0.8rem;">WATER</span></div>
-                    <div style="display:flex; align-items:center; gap:0.5rem;"><div style="width:12px; height:12px; background:#998066;"></div><span style="font-size:0.8rem;">BARREN/URBAN</span></div>
-                    <div style="display:flex; align-items:center; gap:0.5rem;"><div style="width:12px; height:12px; background:#aadd66;"></div><span style="font-size:0.8rem;">VEGETATION (LOW)</span></div>
-                    <div style="display:flex; align-items:center; gap:0.5rem;"><div style="width:12px; height:12px; background:#228b22;"></div><span style="font-size:0.8rem;">VEGETATION (HIGH)</span></div>
+                <div class="legend-box">
+                    <div class="legend-item"><div class="legend-swatch" style="background:#004dcc;"></div><span class="legend-label">WATER</span></div>
+                    <div class="legend-item"><div class="legend-swatch" style="background:#998066;"></div><span class="legend-label">CLEARING/URBAN</span></div>
+                    <div class="legend-item"><div class="legend-swatch" style="background:#aadd66;"></div><span class="legend-label">VEG (LOW)</span></div>
+                    <div class="legend-item"><div class="legend-swatch" style="background:#228b22;"></div><span class="legend-label">VEG (HIGH)</span></div>
                 </div>
                 """, unsafe_allow_html=True)
 
             st.image(display_img, use_column_width=True, channels="RGB")
-            st.caption(f"RENDERING: {caption_text}")
+            st.caption(f"RENDERING: {caption_text} | RGB RANGE: {p_min}%-{p_max}%")
+            
+            # TERM FIX: NDBI Note
+            if layer_mode == "NDBI (CLEARINGS/BUILDUPS)":
+                st.info("NOTE: NDBI highlights non-vegetated areas (soil, concrete). Raw colormaps can be ambiguous due to spectral similarity; rely on the 'CLASSIFICATION' layer for definitive land cover separation.")
             
         else:
             st.markdown("""
@@ -352,7 +293,6 @@ with tab_change:
         st.warning("INSUFFICIENT DATA FOR TEMPORAL ANALYSIS")
         st.stop()
 
-    # Timeline Control
     st.markdown("#### TEMPORAL RANGE SELECTION")
     dates = [extract_date(f) for f in tif_files]
     labels = [d.strftime("%Y-%m-%d") for d in dates]
@@ -365,7 +305,6 @@ with tab_change:
         label_visibility="collapsed"
     )
     
-    # Action Bar
     col_act_1, col_act_2 = st.columns([3, 1])
     with col_act_1:
         st.caption(f"ANALYSIS VECTOR: {labels[start_i]}  ➔  {labels[end_i]}")
@@ -378,23 +317,19 @@ with tab_change:
             sub_dates = [extract_date(f) for f in subset]
             arrays = [read_bands(f) for f in subset]
             
-            # --- MATH CORE ---
             ndvi_stack = np.stack([compute_ndvi(a) for a in arrays])
-            # Masking based on latest image
             mask_ref = valid_data_mask(arrays[-1]) & (~water_mask_from_mndwi(compute_mndwi(arrays[-1])))
             ndvi_stack = np.where(mask_ref, ndvi_stack, np.nan)
             
             if len(subset) == 2:
-                # Delta
                 d_ndvi = delta(ndvi_stack[0], ndvi_stack[1])
                 d_ndbi = delta(compute_ndbi(arrays[0]), compute_ndbi(arrays[1]))
                 score = composite_change_score(d_ndvi, d_ndbi, ndvi_stack[0])
                 raw_change = d_ndvi
             else:
-                # Slope
                 years = np.array([d.year + d.timetuple().tm_yday/365.25 for d in sub_dates])
                 slope = ndvi_slope(years, ndvi_stack)
-                score = -slope # Negative slope = degradation (positive score)
+                score = -slope 
                 raw_change = slope
                 
             st.session_state["cd_result"] = {
@@ -405,17 +340,17 @@ with tab_change:
             }
             st.toast("Delta Calculation Complete", icon="⚡")
 
-    # Reactive Dashboard
     if "cd_result" in st.session_state:
         cd = st.session_state["cd_result"]
         st.markdown("---")
         
-        c_dash, c_map = st.columns([1, 2.5])
+        # LAYOUT FIX: Consistent [1, 3] ratio with Tab 1
+        c_dash, c_map = st.columns([1, 3])
         
         with c_dash:
             st.markdown("#### THRESHOLD CONTROL")
-            st.info("Adjust sensitivity to filter noise.")
-            sens = st.slider("SENSITIVITY", 0.0, 1.0, 0.5, 0.05)
+            # Using Rosin's Method via the backend script
+            sens = st.slider("SENSITIVITY (ROSIN'S METHOD)", 0.0, 1.0, 0.5, 0.05)
             
             st.markdown("#### VISUAL FILTERS")
             show_loss = st.checkbox("DEGRADATION (LOSS)", value=True)
@@ -423,20 +358,24 @@ with tab_change:
             
             st.markdown("#### OVERLAY OPACITY")
             alpha = st.slider("ALPHA", 0.0, 1.0, 0.6, 0.1, label_visibility="collapsed")
+            
+            st.markdown("#### MAP SETTINGS")
+            with st.expander("DYNAMIC RANGE (CLIP)", expanded=True):
+                cp_min = st.slider("SHADOW CLIP (%)", 0, 10, 2, 1, key="cd_pmin")
+                cp_max = st.slider("HIGHLIGHT CLIP (%)", 90, 100, 98, 1, key="cd_pmax")
 
-            # --- LIVE CALCULATION ---
-            # Degradation
+            map_b = st.slider("BRIGHTNESS", 0.1, 3.0, 1.0, 0.1, key="cd_b")
+            map_c = st.slider("CONTRAST", 0.1, 3.0, 1.0, 0.1, key="cd_c")
+
             deg_thr = aggressiveness_to_threshold(cd["score"], sens)
             deg_mask = apply_threshold(cd["score"], deg_thr)
             deg_mask = binary_opening(deg_mask, structure=np.ones((3,3)))
             
-            # Improvement
             imp_thr = np.nanpercentile(cd["change_val"], 85 - (sens * 15))
             imp_thr = max(imp_thr, 0.05)
             imp_mask = cd["change_val"] > imp_thr
             imp_mask = binary_opening(imp_mask, structure=np.ones((3,3)))
             
-            # Stats Logic
             px_total = np.sum(cd["mask"])
             px_loss = np.sum(deg_mask & cd["mask"]) if show_loss else 0
             px_gain = np.sum(imp_mask & cd["mask"]) if show_gain else 0
@@ -463,40 +402,34 @@ with tab_change:
             """, unsafe_allow_html=True)
             
         with c_map:
-            # Render
-            rgb_base = sanitize_image(stretch(np.stack(cd["img_latest"][:3], axis=-1)))
-            # Gamma/Brightness from sidebar
-            rgb_base = adjust_display(rgb_base, brightness=1.1, contrast=1.1)
+            # Stretch with CLIP params
+            rgb_base = sanitize_image(stretch(np.stack(cd["img_latest"][:3], axis=-1), pmin=cp_min, pmax=cp_max))
+            rgb_base = adjust_display(rgb_base, brightness=map_b, contrast=map_c)
             
             out_img = rgb_base.copy()
-            
-            # Colors: Purple (Loss), Lime (Gain)
-            c_loss = np.array([0.75, 0.5, 0.98]) # Violet
-            c_gain = np.array([0.74, 0.94, 0.39]) # Lime
+            c_loss = np.array([0.75, 0.5, 0.98])
+            c_gain = np.array([0.74, 0.94, 0.39])
             
             if show_loss:
                 out_img[deg_mask] = (1-alpha)*out_img[deg_mask] + alpha*c_loss
             if show_gain:
                 out_img[imp_mask] = (1-alpha)*out_img[imp_mask] + alpha*c_gain
                 
-            st.image(sanitize_image(out_img), use_column_width=True, caption="CHANGE DETECTION RENDER [COMPOSITE]")
+            st.image(sanitize_image(out_img), use_column_width=True, caption=f"CHANGE DETECTION | RGB RANGE: {cp_min}%-{cp_max}%")
 
-# ------------------------------------------------------------------------------
-# TAB 3: DOCUMENTATION
-# ------------------------------------------------------------------------------
 with tab_docs:
     st.markdown("""
     ### SYSTEM DOCUMENTATION
-    
-    #### 1. SPECTRAL INDICES
+    #### SPECTRAL INDICES
     * **NDVI:** Normalized Difference Vegetation Index. Primary indicator of biomass.
     * **MNDWI:** Modified Normalized Difference Water Index. Used for automated water masking.
-    * **NDBI:** Normalized Difference Built-up Index. Used to differentiate urban expansion from soil.
-
-    #### 2. CHANGE DETECTION ALGORITHMS
-    * **Dual-Image Mode:** Uses direct spectral delta subtraction (ΔNDVI) weighted by baseline vegetation density.
-    * **Multi-Temporal Mode:** Uses linear regression (Theil-Sen estimator) to derive the slope of the vegetation trend line over time.
+    * **NDBI (Clearings/Buildups):** Normalized Difference Built-up Index. Highlights clearings, bare soil, and built-up areas. **Note:** Raw NDBI colormaps can be ambiguous due to spectral similarities between different land cover types. It is best used as an input for the definitive 'Classification' layer rather than a standalone visual.
     
-    #### 3. THRESHOLDING LOGIC
-    * **Adaptive Sensitivity:** The sensitivity slider interpolates between statistical outliers (percentiles) and physical magnitude limits to separate signal from sensor noise.
+    #### CHANGE ALGORITHMS
+    * **Dual-Image Mode:** Uses direct spectral delta subtraction (ΔNDVI).
+    * **Multi-Temporal Mode:** Uses linear regression (Theil-Sen estimator).
+    
+    #### THRESHOLDING LOGIC
+    * **Vegetation Assessment:** Offers Explicit (physical constants) or Auto-Adaptive (Otsu's Method) thresholding for robust classification.
+    * **Change Detection:** Uses **Rosin's Corner Method** ("The Elbow") to statistically determine the optimal separation between noise and significant change.
     """)
