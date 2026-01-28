@@ -2,6 +2,19 @@ import os
 import glob
 import streamlit as st
 import numpy as np
+import re
+from datetime import datetime
+DATE_RE = re.compile(r"(\d{2})_(\d{2})_(\d{4})")
+
+def extract_date(path: str) -> datetime:
+    name = os.path.basename(path)
+    m = DATE_RE.search(name)
+    if not m:
+        raise ValueError(f"No valid date found in filename: {name}")
+    dd, mm, yyyy = m.groups()
+    return datetime(int(yyyy), int(mm), int(dd))
+
+
 from matplotlib import colormaps
 from scipy.ndimage import binary_opening
 
@@ -250,7 +263,8 @@ st.markdown('<p class="main-header">Vegetation & Change Detection Analysis Platf
 st.markdown('<p class="sub-header">Monitor vegetation health and detect land cover changes using satellite imagery analysis</p>', unsafe_allow_html=True)
 
 # Check for data files
-tif_files = sorted(glob.glob(os.path.join(DATA_DIR, "*.tif")))
+tif_files = glob.glob(os.path.join(DATA_DIR, "*.tif"))
+tif_files = sorted(tif_files, key=extract_date)
 if not tif_files:
     st.error("⚠ No GeoTIFF files found in the 'data/' directory. Please add satellite imagery to begin analysis.")
     st.info("📁 Expected file format: Multi-band GeoTIFF with bands in order: Red, Green, Blue, NIR, SWIR")
@@ -514,6 +528,17 @@ with tab_change:
     <b>Comparison:</b> {os.path.basename(tif_files[0])} (baseline) → {os.path.basename(tif_files[-1])} (current)
     </div>
     """, unsafe_allow_html=True)
+
+    dates = [extract_date(f) for f in tif_files]
+    labels = [d.strftime("%Y-%m-%d") for d in dates]
+
+    start_idx, end_idx = st.select_slider(
+        "Select time range for change detection",
+        options=list(range(len(tif_files))),
+        value=(0, len(tif_files) - 1),
+        format_func=lambda i: labels[i]
+    )
+
     
     col1, col2, col3 = st.columns([1, 1, 1])
     
@@ -521,40 +546,61 @@ with tab_change:
         compute_btn = st.button("▸ Compute Change Analysis", type="primary", use_container_width=True)
     
     if compute_btn:
-        with st.spinner("Analyzing changes between images..."):
-            arr1 = read_bands(tif_files[0])
-            arr2 = read_bands(tif_files[-1])
-            
-            ndvi1 = compute_ndvi(arr1)
-            ndvi2 = compute_ndvi(arr2)
-            ndbi1 = compute_ndbi(arr1)
-            ndbi2 = compute_ndbi(arr2)
-            mndwi = compute_mndwi(arr2)
-            
-            valid_mask = valid_data_mask(arr2)
-            water_mask = ~water_mask_from_mndwi(mndwi)
+        with st.spinner("Analyzing changes across selected time range..."):
+
+            selected_files = tif_files[start_idx:end_idx + 1]
+            selected_dates = [extract_date(f) for f in selected_files]
+
+            # ---- Load imagery ----
+            arrays = [read_bands(f) for f in selected_files]
+            ndvi_stack = np.stack([compute_ndvi(a) for a in arrays])
+
+            # ---- Common masks (from last image) ----
+            mndwi_last = compute_mndwi(arrays[-1])
+            valid_mask = valid_data_mask(arrays[-1])
+            water_mask = ~water_mask_from_mndwi(mndwi_last)
             mask = valid_mask & water_mask
-            
-            ndvi1_masked, ndvi2_masked, ndbi1_masked, ndbi2_masked = apply_masks(
-                ndvi1, ndvi2, ndbi1, ndbi2, mask=mask
-            )
-            
-            # Compute NDVI change
-            ndvi_change = delta(ndvi1_masked, ndvi2_masked)
-            
-            # Compute composite score for degradation
-            score = composite_change_score(
-                ndvi_change,
-                delta(ndbi1_masked, ndbi2_masked),
-                ndvi_baseline=ndvi1_masked,
-            )
-            
+
+            ndvi_stack = np.where(mask, ndvi_stack, np.nan)
+
+            # ====================================================
+            # CASE 1: Exactly 2 images → DELTA logic (old behavior)
+            # ====================================================
+            if len(selected_files) == 2:
+                ndvi_change = delta(ndvi_stack[0], ndvi_stack[1])
+
+                ndbi1 = compute_ndbi(arrays[0])
+                ndbi2 = compute_ndbi(arrays[1])
+                ndbi1, ndbi2 = apply_masks(ndbi1, ndbi2, mask=mask)
+
+                score = composite_change_score(
+                    ndvi_change,
+                    delta(ndbi1, ndbi2),
+                    ndvi_baseline=ndvi_stack[0],
+                )
+
+            # ====================================================
+            # CASE 2: 3+ images → SLOPE (trend-based detection)
+            # ====================================================
+            else:
+                years = np.array([
+                    d.year + d.timetuple().tm_yday / 365.25
+                    for d in selected_dates
+                ])
+
+                ndvi_trend = ndvi_slope(years, ndvi_stack)
+
+                score = normalize(-ndvi_trend)   # degradation = negative slope
+                ndvi_change = ndvi_trend         # reused for improvement
+
             st.session_state["change_data"] = {
                 "score": score,
                 "ndvi_change": ndvi_change,
-                "arr2": arr2,
+                "arr2": arrays[-1],
             }
+
             st.success("✓ Change analysis complete!")
+
     
     if "change_data" in st.session_state:
         st.divider()
@@ -624,7 +670,7 @@ with tab_change:
                 # Compute improvement mask based on NDVI change
                 ndvi_change = change_data["ndvi_change"]
                 # Use percentile-based threshold for improvement
-                improvement_thr = np.nanpercentile(ndvi_change, 85 - aggressiveness * 15)
+                improvement_thr = np.nanpercentile(ndvi_change, 80 - aggressiveness * 10)
                 improvement_mask = ndvi_change > improvement_thr
                 improvement_mask = binary_opening(improvement_mask, structure=np.ones((3, 3)))
                 
