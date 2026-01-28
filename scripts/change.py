@@ -10,17 +10,23 @@ def delta(a: np.ndarray, b: np.ndarray) -> np.ndarray:
 
 
 def ndvi_slope(years: np.ndarray, ndvi_stack: np.ndarray) -> np.ndarray:
-    T, H, W = ndvi_stack.shape
-    slope = np.full((H, W), np.nan, dtype=np.float32)
+    t = years[:, None, None]              # (T, 1, 1)
+    y = ndvi_stack.astype(np.float32)     # (T, H, W)
 
-    for i in range(H):
-        for j in range(W):
-            y = ndvi_stack[:, i, j]
-            if np.count_nonzero(~np.isnan(y)) >= 3:
-                b, m = polyfit(years, y, 1)
-                slope[i, j] = m
+    valid = ~np.isnan(y)
+    count = np.sum(valid, axis=0)
+
+    t_mean = np.nanmean(t, axis=0)
+    y_mean = np.nanmean(y, axis=0)
+
+    cov = np.nanmean((t - t_mean) * (y - y_mean), axis=0)
+    var = np.nanmean((t - t_mean) ** 2, axis=0)
+
+    slope = cov / (var + 1e-6)
+    slope[count < 3] = np.nan
 
     return slope
+
 
 
 def normalize(arr: np.ndarray) -> np.ndarray:
