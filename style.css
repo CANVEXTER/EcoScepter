@@ -1,0 +1,156 @@
+/* style.css */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap');
+
+/* Base Theme */
+.stApp { 
+    background-color: #09090b; 
+    color: #e4e4e7; 
+    font-family: 'Inter', sans-serif; 
+}
+
+/* Headers */
+h1, h2, h3 { 
+    font-family: 'Inter', sans-serif; 
+    letter-spacing: -0.01em; 
+    font-weight: 600; 
+    color: #fafafa; 
+}
+
+/* Custom Header Bar */
+.header-bar {
+    border-bottom: 1px solid #27272a;
+    padding-bottom: 1rem;
+    margin-bottom: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.app-brand { 
+    font-size: 1.25rem; 
+    font-weight: 700; 
+    color: #fafafa; 
+    letter-spacing: -0.03em; 
+}
+
+.session-tag { 
+    font-family: 'JetBrains Mono'; 
+    font-size: 0.75rem; 
+    color: #52525b; 
+    background: #18181b; 
+    padding: 4px 8px; 
+    border-radius: 4px; 
+    border: 1px solid #27272a; 
+}
+
+/* Custom Metric Cards */
+.metric-container {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.metric-box {
+    background: #18181b;
+    border: 1px solid #27272a;
+    border-radius: 6px;
+    padding: 1rem;
+    position: relative;
+    overflow: hidden;
+}
+
+.metric-box::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; width: 4px; height: 100%;
+    background: #3f3f46;
+}
+
+.metric-box.loss::before { background: #c084fc; }
+.metric-box.gain::before { background: #bef264; }
+
+.metric-label { 
+    font-size: 0.7rem; 
+    text-transform: uppercase; 
+    color: #a1a1aa; 
+    letter-spacing: 0.05em; 
+    margin-bottom: 0.25rem; 
+}
+
+.metric-value { 
+    font-family: 'JetBrains Mono'; 
+    font-size: 1.5rem; 
+    font-weight: 700; 
+    color: #f4f4f5; 
+}
+
+/* Legend Box */
+.legend-box {
+    display: flex; 
+    gap: 1rem; 
+    background: #18181b; 
+    padding: 0.75rem; 
+    border: 1px solid #27272a; 
+    border-radius: 6px;
+    margin-bottom: 1rem;
+    width: 100%;
+    flex-wrap: wrap;
+    font-size: 0.8rem;
+}
+
+.l-item { display:flex; align-items:center; gap:0.5rem; }
+.l-swatch { width:10px; height:10px; border-radius:2px; }
+
+/* Streamlit Components Overrides */
+section[data-testid="stSidebar"] { 
+    background-color: #0c0c0e; 
+    border-right: 1px solid #27272a; 
+}
+
+.stTabs [data-baseweb="tab-list"] { 
+    gap: 2rem; 
+    border-bottom: 1px solid #27272a; 
+}
+
+.stTabs [data-baseweb="tab"] { 
+    height: 3rem; 
+    color: #71717a; 
+    font-weight: 500; 
+}
+
+.stTabs [aria-selected="true"] { 
+    color: #fafafa; 
+    border-bottom: 2px solid #22c55e; 
+}
+
+div[data-testid="stExpander"] { 
+    background: #121214; 
+    border: 1px solid #27272a; 
+    border-radius: 6px; 
+}
+
+/* Button Styling */
+.stButton > button { 
+    background: #27272a; 
+    color: #fafafa; 
+    border: 1px solid #3f3f46; 
+    border-radius: 6px; 
+    transition: all 0.2s; 
+}
+
+.stButton > button:hover { 
+    border-color: #71717a; 
+    background: #3f3f46; 
+}
+
+div[data-testid="stVerticalBlock"] > .stButton > button[kind="primary"] { 
+    background: #22c55e; 
+    color: #052e16; 
+    border: none; 
+    font-weight: 600; 
+}
+
+#MainMenu {visibility: hidden;} 
+footer {visibility: hidden;}
+.block-container { padding-top: 6rem; padding-bottom: 5rem; }

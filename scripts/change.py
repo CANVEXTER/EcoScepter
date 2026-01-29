@@ -69,3 +69,38 @@ def composite_change_score(
     score = (w_ndvi * weighted_loss) + (w_ndbi * np.clip(ndbi_gain, -0.5, 0.5))
 
     return score
+
+# EcoScepter/scripts/change.py
+import numpy as np
+
+# ... [Keep existing delta, ndvi_slope, composite_change_score functions exactly as they are] ...
+
+# --- ADD THIS NEW FUNCTION ---
+def compute_extended_stats(
+    change_arr: np.ndarray, 
+    mask: np.ndarray, 
+    loss_mask: np.ndarray, 
+    gain_mask: np.ndarray
+) -> dict:
+    """
+    Computes intensity statistics for reporting.
+    """
+    # Extract valid pixels only
+    valid_change = change_arr[mask]
+    
+    # Loss Intensity (how bad is the loss where it is happening?)
+    loss_vals = change_arr[mask & loss_mask]
+    avg_loss = np.mean(loss_vals) if loss_vals.size > 0 else 0.0
+    
+    # Gain Intensity (how strong is the recovery?)
+    gain_vals = change_arr[mask & gain_mask]
+    avg_gain = np.mean(gain_vals) if gain_vals.size > 0 else 0.0
+    
+    # Overall Distribution
+    return {
+        "avg_loss_val": float(avg_loss),
+        "avg_gain_val": float(avg_gain),
+        "std_dev": float(np.std(valid_change)) if valid_change.size > 0 else 0.0,
+        "min_val": float(np.min(valid_change)) if valid_change.size > 0 else 0.0,
+        "max_val": float(np.max(valid_change)) if valid_change.size > 0 else 0.0
+    }
