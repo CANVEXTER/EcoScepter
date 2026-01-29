@@ -1,2 +1,5 @@
 # GeoTIFFs
 data/
+
+# Pycache
+scripts/__pycache__/
