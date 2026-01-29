@@ -132,7 +132,7 @@ st.markdown("""
     div[data-testid="stVerticalBlock"] > .stButton > button[kind="primary"] { background: #22c55e; color: #052e16; border: none; font-weight: 600; }
     
     #MainMenu {visibility: hidden;} footer {visibility: hidden;}
-    .block-container { padding-top: 2rem; padding-bottom: 5rem; }
+    .block-container { padding-top: 6rem; padding-bottom: 5rem; }
 </style>
 """, unsafe_allow_html=True)
 
