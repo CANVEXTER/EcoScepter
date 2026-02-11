@@ -119,9 +119,13 @@ section[data-testid="stSidebar"] {
     font-weight: 500; 
 }
 
+/* FIX: Unified Tab Indicator */
 .stTabs [aria-selected="true"] { 
-    color: #fafafa; 
-    border-bottom: 2px solid #22c55e; 
+    color: #fafafa !important; 
+}
+
+.stTabs [data-baseweb="tab-highlight"] {
+    background-color: #22c55e !important;
 }
 
 div[data-testid="stExpander"] { 
